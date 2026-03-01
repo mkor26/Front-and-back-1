@@ -78,7 +78,7 @@ export default function ProductsPage() {
         <div className="page">
             <header className="header">
                 <div className="header__inner">
-                    <div className="brand">Мой Магазин</div>
+                    <div className="brand">Магазин электроники"</div>
                 </div>
             </header>
 
@@ -105,7 +105,7 @@ export default function ProductsPage() {
 
             <footer className="footer">
                 <div className="footer__inner">
-                    © {new Date().getFullYear()} Мой Магазин
+                    © {new Date().getFullYear()} Магазин электроники
                 </div>
             </footer>
 

@@ -42,11 +42,11 @@ export default function ProductModal({ open, mode, initialProduct, onClose, onSu
             return;
         }
         if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
-            alert('Введите корректную цену (положительное число)');
+            alert('Введите корректную цену');
             return;
         }
         if (!Number.isInteger(parsedStock) || parsedStock < 0) {
-            alert('Введите корректное количество на складе (целое неотрицательное число)');
+            alert('Введите корректное количество на складе');
             return;
         }
 

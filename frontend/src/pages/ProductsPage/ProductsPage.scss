@@ -108,7 +108,7 @@ $dangerBg: rgba(239, 68, 68, 0.12);
     text-align: center;
 }
 
-.userRow {
+.productRow {
     @include card(12px);
     display: flex;
     align-items: center;
@@ -117,28 +117,31 @@ $dangerBg: rgba(239, 68, 68, 0.12);
     padding: 12px;
 }
 
-.userMain {
+.productMain {
     display: flex;
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
 
-    .userId {
+    .productId {
         opacity: 0.7;
         font-variant-numeric: tabular-nums;
         font-size: 12px;
     }
 
-    .userName {
+    .productName {
         font-weight: 600;
     }
 
-    .userAge {
+    .productPrice {
+        opacity: 0.85;
+    }
+    .productStock {
         opacity: 0.85;
     }
 }
 
-.userActions {
+.productActions {
     display: flex;
     gap: 8px;
 }
