@@ -8,7 +8,27 @@ const apiClient = axios.create({
     }
 });
 
+// Добавляем токен к каждому запросу
+apiClient.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
 export const api = {
+    // Аутентификация
+    register: async (userData) => {
+        const response = await apiClient.post('/auth/register', userData);
+        return response.data;
+    },
+    login: async (email, password) => {
+        const response = await apiClient.post('/auth/login', { email, password });
+        return response.data;
+    },
+    
+    // Товары
     getProducts: async () => {
         const response = await apiClient.get('/products');
         return response.data;
@@ -22,7 +42,7 @@ export const api = {
         return response.data;
     },
     updateProduct: async (id, product) => {
-        const response = await apiClient.patch(`/products/${id}`, product);
+        const response = await apiClient.put(`/products/${id}`, product);
         return response.data;
     },
     deleteProduct: async (id) => {
