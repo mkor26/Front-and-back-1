@@ -3,6 +3,11 @@ const cors = require('cors');
 const { nanoid } = require('nanoid');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const ACCESS_SECRET = 'your-access-secret-key-change-in-production';
+const REFRESH_SECRET = 'your-refresh-secret-key-change-in-production';
+const ACCESS_EXPIRES_IN = '15m';
+const REFRESH_EXPIRES_IN = '7d';   
+
 
 // Swagger
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -46,6 +51,7 @@ let products = [
     { id: nanoid(6), userId: null, name: 'Монитор Samsung', category: 'Электроника', description: '27", 4K, IPS', price: 32000 },
     { id: nanoid(6), userId: null, name: 'Наушники Sony', category: 'Аудио', description: 'Беспроводные, шумоподавление', price: 15000 },
 ];
+let refreshTokens = new Set();
 
 // --- Вспомогательные функции ---
 async function hashPassword(password) {
@@ -68,13 +74,13 @@ function generateToken(user) {
 // Middleware для проверки токена
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
         return res.status(401).json({ error: 'Требуется авторизация' });
     }
 
-    jwt.verify(token, JWT_SECRET, (err, user) => {
+    jwt.verify(token, ACCESS_SECRET, (err, user) => {
         if (err) {
             return res.status(403).json({ error: 'Неверный или истекший токен' });
         }
@@ -250,9 +256,124 @@ app.post('/api/auth/register', async (req, res) => {
  *     responses:
  *       200:
  *         description: Успешный вход
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
  *       401:
  *         description: Неверные учетные данные
- * /**
+ */
+app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email и пароль обязательны' });
+    }
+
+    const user = findUserByEmail(email.toLowerCase().trim());
+    if (!user) {
+        return res.status(401).json({ error: 'Неверный email или пароль' });
+    }
+
+    const isValid = await verifyPassword(password, user.hashedPassword);
+    if (!isValid) {
+        return res.status(401).json({ error: 'Неверный email или пароль' });
+    }
+
+    // Генерируем оба токена
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    
+    // Сохраняем refresh-токен в хранилище
+    refreshTokens.add(refreshToken);
+
+    res.json({
+        accessToken,
+        refreshToken
+    });
+});
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Обновить токены по refresh-токену
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Новая пара токенов
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *       400:
+ *         description: refreshToken не передан
+ *       401:
+ *         description: Неверный или истекший refresh-токен
+ */
+app.post('/api/auth/refresh', (req, res) => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        return res.status(400).json({ error: 'refreshToken is required' });
+    }
+
+    // Проверяем, что токен есть в хранилище
+    if (!refreshTokens.has(refreshToken)) {
+        return res.status(401).json({ error: 'Invalid refresh token' });
+    }
+
+    try {
+        // Проверяем подпись refresh-токена
+        const payload = jwt.verify(refreshToken, REFRESH_SECRET);
+        
+        // Ищем пользователя
+        const user = users.find(u => u.id === payload.id);
+        if (!user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+
+        // Удаляем старый refresh-токен (ротация)
+        refreshTokens.delete(refreshToken);
+        
+        // Генерируем новую пару токенов
+        const newAccessToken = generateAccessToken(user);
+        const newRefreshToken = generateRefreshToken(user);
+        
+        // Сохраняем новый refresh-токен
+        refreshTokens.add(newRefreshToken);
+
+        res.json({
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken
+        });
+    } catch (err) {
+        return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+});
+
+/** 
  * @swagger
  * /api/auth/me:
  *   get:
@@ -296,33 +417,7 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 });
 
 
-app.post('/api/auth/login', async (req, res) => {
-    const { email, password } = req.body;
 
-    if (!email || !password) {
-        return res.status(400).json({ error: 'Email и пароль обязательны' });
-    }
-
-    const user = findUserByEmail(email.toLowerCase().trim());
-    if (!user) {
-        return res.status(401).json({ error: 'Неверный email или пароль' });
-    }
-
-    const isValid = await verifyPassword(password, user.hashedPassword);
-    if (!isValid) {
-        return res.status(401).json({ error: 'Неверный email или пароль' });
-    }
-
-    const token = generateToken(user);
-
-    res.json({
-        id: user.id,
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        token,
-    });
-});
 
 // ========== ТОВАРЫ (только для авторизованных) ==========
 
@@ -521,3 +616,28 @@ app.listen(port, () => {
     console.log(`Сервер запущен на http://localhost:${port}`);
     console.log(`Swagger UI: http://localhost:${port}/api-docs`);
 });
+
+// Функции генерации токенов
+function generateAccessToken(user) {
+    return jwt.sign(
+        { 
+            id: user.id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name
+        },
+        ACCESS_SECRET,
+        { expiresIn: ACCESS_EXPIRES_IN }
+    );
+}
+
+function generateRefreshToken(user) {
+    return jwt.sign(
+        { 
+            id: user.id,
+            email: user.email
+        },
+        REFRESH_SECRET,
+        { expiresIn: REFRESH_EXPIRES_IN }
+    );
+}
